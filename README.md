@@ -1,5 +1,5 @@
-# PROPT ENHANCER ✨
-Auto Prompt Enhancing powered by GPT
+# PROMPT ENHANCER ✨
+Auto Prompt Enhancing powered by GPT, Streamlit
 
 ## How to run
 ### 1. Set your Openai api key in 
