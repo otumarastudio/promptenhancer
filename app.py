@@ -1,94 +1,43 @@
-# app.py
+# streamlit_app.py
 import streamlit as st
-import asyncio
-from openai import AsyncOpenAI
-from prompt_master import asyncdeepThink
+from modules.gpt_utils import deepThink, prompt_enhancer
 
-st.set_page_config(page_title="Prompt Master✨", layout="wide",)
 st.title('Prompt Master✨')
 
-# OpenAI API 클라이언트 초기화
-api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else "your_api_key_here"
+api_key = st.sidebar.text_input('API 키를 입력하세요', type="password")
+model_list = ["gpt-3.5-turbo", "gpt-4-0125-preview"]
+model_name = st.sidebar.selectbox('모델을 선택하세요', model_list)
+iterations = st.sidebar.number_input('반복 횟수를 선택하세요', min_value=1, max_value=10, value=3)
 
-try:
-    client = AsyncOpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-except KeyError:
-    st.error("API Key not found. Please set your OpenAI API key.")
-    st.stop()
+initial_prompt = st.text_area('🧠 초기 프롬프트를 입력하세요')
+additional_info = st.text_area('프롬프트에 추가할 예시 데이터가 있다면 입력해주세요.')
+purpose = st.text_area('🎯 프롬프트의 명확한 목적을 입력하세요. 원하는 이상적인 결과나 기대효과가 뭔지, 피하고 싶은 결과는 무엇인지 작성해주세요.')
 
-# 사용자 입력
-with st.sidebar:
-    model_list = ["gpt-3.5-turbo", "gpt-4-0125-preview"]
-    model_name = st.sidebar.selectbox('모델 선택', model_list)
-    iterations = st.number_input("반복 횟수", value=3, min_value=1, max_value=10)
-
-initial_prompt = st.text_area("Initial Prompt")
-purpose = st.text_area("Purpose of the prompt")
-additional_info = st.text_area("Additional information (if any)")
-generate = st.button("Enhance Prompt!")
-
-# 결과를 표시할 장소
-result_placeholder = st.empty()
-
+# 역할별 시스템 프롬프트 설정
 system_prompts = {
     "ai_assistant": "You are an AI designed to assist with human requests.",
     "prompt_engineer": "You are a Prompt Engineer. Your role is to evaluate LLM responses and give the best suggest for improvements of prompt."
 }
-
-async def prompt_enhancer(placeholder, initial_prompt, purpose, additional_info, iterations):
-    thinker = asyncdeepThink(api_key, model_name,  system_prompts["ai_assistant"], additional_info=additional_info, temperature=0.4)
-    prompt_master = asyncdeepThink(api_key, model_name, system_prompts["prompt_engineer"], additional_info=additional_info, temperature=0.7)
-    enhanced_prompt = initial_prompt
-
-    for i in range(iterations):
-           # Execution phase
-        execution_result = await thinker.execute(f"{enhanced_prompt}\n\n{additional_info}")
-        placeholder.markdown(f"### Iteration {i+1} Execution Result:")
-        placeholder.write(execution_result)
-
-        # Evaluation phase
-        evaluation_prompt = f"Given the purpose '{purpose}', evaluate the following response: {execution_result}"
-        evaluation_result = await prompt_master.execute(evaluation_prompt)
-        
-        # Improvement phase
-        improvement_prompt = f"Based on the evaluation '{evaluation_result}', suggest an improved prompt."
-        enhanced_prompt = await prompt_master.execute(improvement_prompt)
-        
-        placeholder.markdown(f"### Iteration {i+1} Enhanced Prompt:")
-        placeholder.write(enhanced_prompt)    
-        # system_prompt = "You are a Prompt Engineer. Your role is to evaluate responses and suggest improvements."
-        # user_prompt = f"{enhanced_prompt}\n\nPurpose: {purpose}"
-
-
-
-    # Displaying the final result
-    final_result = await thinker.execute(enhanced_prompt)
-    placeholder.markdown('### Final Enhanced Prompt Execution Result:')
-    placeholder.write(final_result)
-    return enhanced_prompt, final_result
-
-        # stream = await client.chat.completions.create(
-        #     model=model_name,
-        #     messages=[
-        #         {"role": "system", "content": system_prompt},
-        #         {"role": "user", "content": user_prompt},
-        #     ],
-        #     stream=True
-        # )
-        # streamed_text = ""
-        # async for chunk in stream:
-        #     chunk_content = chunk.choices[0].delta.content
-        #     if chunk_content is not None:
-        #         streamed_text += chunk_content
-        #         placeholder.info(streamed_text)
-        # enhanced_prompt = streamed_text
-
-async def main():
-    await prompt_enhancer(result_placeholder, initial_prompt, purpose, additional_info, iterations)
-
-if generate:
-    if initial_prompt == "" or purpose == "":
-        st.warning("Please enter the initial prompt and purpose.")
+if st.button('프롬프트 실행'):
+    if not api_key:
+        st.error('API 키가 필요합니다.')
     else:
-        asyncio.run(main())
-        
+        with st.spinner('프롬프트를 개선하는 중...'):
+            thinker = deepThink(api_key, model_name, system_prompts["ai_assistant"], additional_info=additional_info, temperature=0.4)
+            prompt_master = deepThink(api_key, model_name, system_prompts["prompt_engineer"], additional_info=additional_info, temperature=0.7)
+            
+            result_placeholder = st.empty()            
+            enhanced_prompt, execution_results, final_result = prompt_enhancer(initial_prompt, purpose, thinker, prompt_master, iterations)
+                                    
+        # st.write('### 초기 프롬프트 실행 결과')
+        # for i, result in enumerate(execution_results, start=1):
+        #     st.markdown(f"### Iteration {i}: ")
+        #     st.write(result)
+            
+        # 개선된 프롬프트 표시
+        st.markdown('### 개선된 프롬프트:')
+        st.write(enhanced_prompt) # 최종적으로 만들어진 프롬프트를 보여줌
+
+        st.info('### 개선된 프롬프트 실행 결과')        
+        st.write(final_result)
+
